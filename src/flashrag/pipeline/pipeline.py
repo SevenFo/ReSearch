@@ -33,6 +33,7 @@ class BasicPipeline:
 
         if do_eval:
             # evaluate & save result
+            print("Evaluating...")
             eval_result = self.evaluator.evaluate(dataset)
             print(eval_result)
 
@@ -72,20 +73,31 @@ class SequentialPipeline(BasicPipeline):
 
     def naive_run(self, dataset, do_eval=True, pred_process_fun=None):
         # direct generation without RAG
-        input_prompts = [self.prompt_template.get_string(question=q) for q in dataset.question]
+        input_prompts = [
+            self.prompt_template.get_string(question=q) for q in dataset.question
+        ]
         dataset.update_output("prompt", input_prompts)
 
         # pred_answer_list = self.generator.generate(input_prompts)
         pred_answer_list = [None] * len(input_prompts)
         max_workers = 100
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_prompt = {executor.submit(self.generator.generate, prompt): i for i, prompt in enumerate(input_prompts)}
-            for future in tqdm(as_completed(future_to_prompt), total=len(future_to_prompt), desc="Inference: "):
+            future_to_prompt = {
+                executor.submit(self.generator.generate, prompt): i
+                for i, prompt in enumerate(input_prompts)
+            }
+            for future in tqdm(
+                as_completed(future_to_prompt),
+                total=len(future_to_prompt),
+                desc="Inference: ",
+            ):
                 i = future_to_prompt[future]
                 pred_answer_list[i] = future.result()[0]
         dataset.update_output("pred", pred_answer_list)
 
-        dataset = self.evaluate(dataset, do_eval=do_eval, pred_process_fun=pred_process_fun)
+        dataset = self.evaluate(
+            dataset, do_eval=do_eval, pred_process_fun=pred_process_fun
+        )
         return dataset
 
     def run(self, dataset, do_eval=True, pred_process_fun=None):
@@ -125,27 +137,35 @@ class SequentialPipeline(BasicPipeline):
             for item in dataset:
                 q = item.question
                 docs = item.retrieval_result
-                input_prompts.append([q + " " + doc['contents'] for doc in docs])
+                input_prompts.append([q + " " + doc["contents"] for doc in docs])
         dataset.update_output("prompt", input_prompts)
 
         # delete used refiner to release memory
         if self.refiner:
             del self.refiner
-        
+
         # pred_answer_list = self.generator.generate(input_prompts)
         max_workers = 100
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_prompt = {executor.submit(self.generator.generate, prompt): i for i, prompt in enumerate(input_prompts)}
+            future_to_prompt = {
+                executor.submit(self.generator.generate, prompt): i
+                for i, prompt in enumerate(input_prompts)
+            }
             pred_answer_list = [None] * len(input_prompts)
-            for future in tqdm(as_completed(future_to_prompt), total=len(future_to_prompt), desc="Inference: "):
+            for future in tqdm(
+                as_completed(future_to_prompt),
+                total=len(future_to_prompt),
+                desc="Inference: ",
+            ):
                 i = future_to_prompt[future]
                 pred_answer_list[i] = future.result()[0]
         dataset.update_output("pred", pred_answer_list)
-        
 
         dataset.update_output("pred", pred_answer_list)
 
-        dataset = self.evaluate(dataset, do_eval=do_eval, pred_process_fun=pred_process_fun)
+        dataset = self.evaluate(
+            dataset, do_eval=do_eval, pred_process_fun=pred_process_fun
+        )
 
         return dataset
 
@@ -194,7 +214,9 @@ class ConditionalPipeline(BasicPipeline):
         # merge datasets into original format
         dataset = merge_dataset(dataset_split, judge_result)
 
-        dataset = self.evaluate(dataset, do_eval=do_eval, pred_process_fun=pred_process_fun)
+        dataset = self.evaluate(
+            dataset, do_eval=do_eval, pred_process_fun=pred_process_fun
+        )
 
         return dataset
 
@@ -206,8 +228,8 @@ class AdaptivePipeline(BasicPipeline):
         norag_template=None,
         single_hop_prompt_template=None,
         multi_hop_prompt_template=None,
-        retriever = None,
-        generator = None
+        retriever=None,
+        generator=None,
     ):
         super().__init__(config)
         # load adaptive classifier as judger
@@ -245,7 +267,11 @@ class AdaptivePipeline(BasicPipeline):
         )
 
         self.multi_hop_pipeline = IRCOTPipeline(
-            config, prompt_template=multi_hop_prompt_template, retriever=retriever, generator=generator, max_iter=5
+            config,
+            prompt_template=multi_hop_prompt_template,
+            retriever=retriever,
+            generator=generator,
+            max_iter=5,
         )
 
     def run(self, dataset, do_eval=True, pred_process_fun=None):
@@ -257,17 +283,25 @@ class AdaptivePipeline(BasicPipeline):
         dataset_split = split_dataset(dataset, judge_result)
         for symbol, symbol_dataset in dataset_split.items():
             if symbol == "A":
-                symbol_dataset = self.norag_pipeline.naive_run(symbol_dataset, do_eval=False)
+                symbol_dataset = self.norag_pipeline.naive_run(
+                    symbol_dataset, do_eval=False
+                )
             elif symbol == "B":
-                symbol_dataset = self.single_hop_pipeline.run(symbol_dataset, do_eval=False)
+                symbol_dataset = self.single_hop_pipeline.run(
+                    symbol_dataset, do_eval=False
+                )
             elif symbol == "C":
-                symbol_dataset = self.multi_hop_pipeline.run(symbol_dataset, do_eval=False)
+                symbol_dataset = self.multi_hop_pipeline.run(
+                    symbol_dataset, do_eval=False
+                )
             else:
                 assert False, "Unknown symbol!"
 
         # merge datasets into original format
         dataset = merge_dataset(dataset_split, judge_result)
 
-        dataset = self.evaluate(dataset, do_eval=do_eval, pred_process_fun=pred_process_fun)
+        dataset = self.evaluate(
+            dataset, do_eval=do_eval, pred_process_fun=pred_process_fun
+        )
 
         return dataset

@@ -2,6 +2,7 @@ from flashrag.config import Config
 from flashrag.utils import get_dataset
 import argparse
 
+
 def naive(args, config_dict):
     from flashrag.pipeline import SequentialPipeline
 
@@ -14,8 +15,10 @@ def naive(args, config_dict):
 
     result = pipeline.run(test_data)
 
+
 def zero_shot(args, config_dict):
     from flashrag.pipeline import SequentialPipeline
+
     # preparation
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
@@ -31,6 +34,7 @@ def zero_shot(args, config_dict):
     )
     pipeline = SequentialPipeline(config, templete)
     result = pipeline.naive_run(test_data)
+
 
 def iterretgen(args, config_dict):
     """
@@ -54,6 +58,7 @@ def iterretgen(args, config_dict):
     pipeline = IterativePipeline(config, iter_num=iter_num)
     result = pipeline.run(test_data)
 
+
 def ircot(args, config_dict):
     """
     Reference:
@@ -71,14 +76,17 @@ def ircot(args, config_dict):
 
     result = pipeline.run(test_data)
 
+
 def research(args, config_dict):
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
     test_data = all_split[args.split]
-    
+
     from flashrag.pipeline import ReSearchPipeline
+
     pipeline = ReSearchPipeline(config, apply_chat=args.apply_chat)
     result = pipeline.run(test_data)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Running exp")
@@ -88,9 +96,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default="bamboogle")
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--save_dir", type=str, default="your-save-dir")
-    parser.add_argument("--save_note", type=str, default='your-save-note-for-identification')
+    parser.add_argument(
+        "--save_note", type=str, default="your-save-note-for-identification"
+    )
     parser.add_argument("--sgl_remote_url", type=str, default="your-sgl-remote-url")
-    parser.add_argument("--remote_retriever_url", type=str, default="your-remote-retriever-url")
+    parser.add_argument(
+        "--remote_retriever_url", type=str, default="your-remote-retriever-url"
+    )
     parser.add_argument("--generator_model", type=str, default="your-local-model-path")
     parser.add_argument("--apply_chat", type=bool, default=True)
 

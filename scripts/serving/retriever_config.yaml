@@ -1,9 +1,9 @@
 # ------------------------------------------------Environment Settings------------------------------------------------#
-gpu_id: "0,1,2,3,4,5,6,7"
+gpu_id: "0,1,2,3"
 
 # -------------------------------------------------Retrieval Settings------------------------------------------------#
 # If set the name, the model path will be find in global paths
-retrieval_method: "/path/to/retrieval/model"  # name or path of the retrieval model. 
-index_path: "/path/to/index" # path to the indexed file
+retrieval_method: "/home/ps/Projects/ReSearch-1/e5-base-v2_1744472152"  # name or path of the retrieval model. 
+index_path: "/home/ps/Projects/ReSearch-1/FlashRAG_datasets_1744472312/retrieval-corpus/e5_flat_inner.index" # path to the indexed file
 faiss_gpu: True # whether use gpu to hold index
-corpus_path: "/path/to/corpus"  # path to corpus in '.jsonl' format that store the documents
+corpus_path: "/home/ps/Projects/ReSearch-1/FlashRAG_datasets_1744472312/retrieval-corpus/wiki18_100w.jsonl"  # path to corpus in '.jsonl' format that store the documents

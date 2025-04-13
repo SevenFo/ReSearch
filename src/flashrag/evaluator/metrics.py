@@ -61,7 +61,10 @@ class F1_Score(BaseMetric):
             normalized_prediction = normalize_answer(prediction)
             normalized_ground_truth = normalize_answer(ground_truth)
 
-            if normalized_prediction in ["yes", "no", "noanswer"] and normalized_prediction != normalized_ground_truth:
+            if (
+                normalized_prediction in ["yes", "no", "noanswer"]
+                and normalized_prediction != normalized_ground_truth
+            ):
                 continue
             if (
                 normalized_ground_truth in ["yes", "no", "noanswer"]
@@ -156,19 +159,28 @@ class ExactMatch(BaseMetric):
                 if match is not None:
                     score = 1.0
                     break
+                else:
+                    print(
+                        f"Regex match failed: golden_answer: {golden_answer}, prediction: {normalized_prediction}, match: {match}"
+                    )
             else:
                 golden_answer = normalize_answer(golden_answer)
                 if golden_answer == normalized_prediction:
                     score = 1.0
                     break
+                else:
+                    print(
+                        f"Exact match failed: golden_answer: {golden_answer}, prediction: {normalized_prediction}"
+                    )
         return score
 
     def calculate_metric(self, data):
         pred_list = data.pred
         golden_answers_list = self.get_dataset_answer(data)
-
+        print(f"golden_answers_list: {golden_answers_list}, pred_list: {pred_list}")
         metric_score_list = [
-            self.calculate_em(pred, golden_answers) for pred, golden_answers in zip(pred_list, golden_answers_list)
+            self.calculate_em(pred, golden_answers)
+            for pred, golden_answers in zip(pred_list, golden_answers_list)
         ]
         em_score = sum(metric_score_list) / len(metric_score_list)
 
@@ -197,11 +209,19 @@ class Sub_ExactMatch(BaseMetric):
                 if match is not None:
                     score = 1.0
                     break
+                else:
+                    print(
+                        f"Regex match failed: golden_answer: {golden_answer}, prediction: {normalized_prediction}, match: {match}"
+                    )
             else:
                 golden_answer = normalize_answer(golden_answer)
                 if golden_answer in normalized_prediction:
                     score = 1.0
                     break
+                else:
+                    print(
+                        f"Sub-Exact match failed: golden_answer: {golden_answer}, prediction: {normalized_prediction}"
+                    )
         return score
 
     def calculate_metric(self, data):
@@ -209,7 +229,8 @@ class Sub_ExactMatch(BaseMetric):
         pred_list = data.pred
 
         metric_score_list = [
-            self.calculate_sub_em(pred, golden_answers) for pred, golden_answers in zip(pred_list, golden_answers_list)
+            self.calculate_sub_em(pred, golden_answers)
+            for pred, golden_answers in zip(pred_list, golden_answers_list)
         ]
         sub_em_score = sum(metric_score_list) / len(metric_score_list)
 
@@ -231,7 +252,9 @@ class Retrieval_Recall(BaseMetric):
         recall_score_list = []
         for doc_list, golden_answers in zip(retrieve_docs, golden_answers_list):
             if len(doc_list) < self.topk:
-                warnings.warn(f"Length of retrieved docs is smaller than topk ({self.topk})")
+                warnings.warn(
+                    f"Length of retrieved docs is smaller than topk ({self.topk})"
+                )
             doc_list = [doc["contents"] for doc in doc_list[: self.topk]]
             hit_list = []
             for doc in doc_list:
@@ -263,7 +286,9 @@ class Retrieval_Precision(BaseMetric):
         precision_score_list = []
         for doc_list, golden_answers in zip(retrieve_docs, golden_answers_list):
             if len(doc_list) < self.topk:
-                warnings.warn(f"Length of retrieved docs is smaller than topk ({self.topk})")
+                warnings.warn(
+                    f"Length of retrieved docs is smaller than topk ({self.topk})"
+                )
             doc_list = [doc["contents"] for doc in doc_list[: self.topk]]
             hit_list = []
             for doc in doc_list:
@@ -277,13 +302,15 @@ class Retrieval_Precision(BaseMetric):
             precision_score_list.append(score)
         precision_score = sum(precision_score_list) / len(precision_score_list)
 
-        return {f"retrieval_precision_top{self.topk}": precision_score}, precision_score_list
+        return {
+            f"retrieval_precision_top{self.topk}": precision_score
+        }, precision_score_list
 
 
 class Rouge_Score(BaseMetric):
     metric_name = "rouge_score"
     cached_scores = {}
-    
+
     def __init__(self, config):
         super().__init__(config)
         from rouge import Rouge
@@ -305,8 +332,6 @@ class Rouge_Score(BaseMetric):
 
         self.cached_scores[(pred, tuple(golden_answers))] = output
         return output
-
-
 
 
 class Rouge_1(Rouge_Score):
@@ -366,11 +391,10 @@ class Rouge_L(Rouge_Score):
         return {"rouge-l": score}, metric_score_list
 
 
-
 class ZH_Rouge_Score(BaseMetric):
     metric_name = "zh_rouge_score"
     cached_scores = {}
-    
+
     def __init__(self, config):
         super().__init__(config)
         from rouge_chinese import Rouge
@@ -379,12 +403,13 @@ class ZH_Rouge_Score(BaseMetric):
 
     def calculate_rouge(self, pred, golden_answers):
         import jieba
+
         if (pred, tuple(golden_answers)) in self.cached_scores:
             return self.cached_scores[(pred, tuple(golden_answers))]
         output = {}
-        pred = ' '.join(jieba.cut(pred))
+        pred = " ".join(jieba.cut(pred))
         for answer in golden_answers:
-            answer = ' '.join(jieba.cut(answer))
+            answer = " ".join(jieba.cut(answer))
             scores = self.scorer.get_scores(pred, answer)
             for key in ["rouge-1", "rouge-2", "rouge-l"]:
                 if key not in output:
@@ -397,14 +422,11 @@ class ZH_Rouge_Score(BaseMetric):
         return output
 
 
-
-
 class ZH_Rouge_1(ZH_Rouge_Score):
     metric_name = "zh_rouge-1"
 
     def __init__(self, config):
         super().__init__(config)
-        
 
     def calculate_metric(self, data):
         golden_answers_list = self.get_dataset_answer(data)
@@ -457,8 +479,6 @@ class ZH_Rouge_L(ZH_Rouge_Score):
         return {"zh_rouge-l": score}, metric_score_list
 
 
-
-
 class BLEU(BaseMetric):
     metric_name = "bleu"
 
@@ -478,7 +498,8 @@ class BLEU(BaseMetric):
 
         pred_list = [self.tokenizer(pred) for pred in pred_list]
         golden_answers_list = [
-            [self.tokenizer(ans) for ans in golden_answers] for golden_answers in golden_answers_list
+            [self.tokenizer(ans) for ans in golden_answers]
+            for golden_answers in golden_answers_list
         ]
         score = compute_bleu(
             reference_corpus=golden_answers_list,
@@ -486,7 +507,9 @@ class BLEU(BaseMetric):
             max_order=self.max_order,
             smooth=self.smooth,
         )
-        (total_bleu, precisions, bp, ratio, translation_length, reference_length) = score
+        (total_bleu, precisions, bp, ratio, translation_length, reference_length) = (
+            score
+        )
 
         score_list = []
         for pred, golden_answers in zip(pred_list, golden_answers_list):
@@ -559,8 +582,13 @@ class LLMJudge(BaseMetric):
         question_list = data.question
         pred_list = data.pred
 
-        judge_input_prompt = [self.JUDGE_PROMPT.format(question=q, answer=a) for q, a in zip(question_list, pred_list)]
-        judge_output = self.llm_pipeline(judge_input_prompt, max_new_tokens=100, batch_size=8)
+        judge_input_prompt = [
+            self.JUDGE_PROMPT.format(question=q, answer=a)
+            for q, a in zip(question_list, pred_list)
+        ]
+        judge_output = self.llm_pipeline(
+            judge_input_prompt, max_new_tokens=100, batch_size=8
+        )
         judge_output = [item["generated_text"] for item in judge_output]
 
         metric_score_list = [self.extract_judge_score(o) for o in judge_output]
@@ -600,18 +628,22 @@ class CountToken(BaseMetric):
     def calculate_metric(self, data):
         input_prompts = data.prompt
         if self.is_hf_tokenizer:
-            token_counts = [len(self.tokenizer.tokenize(text)) for text in input_prompts]
+            token_counts = [
+                len(self.tokenizer.tokenize(text)) for text in input_prompts
+            ]
         else:
             token_counts = [len(self.tokenizer.encode(text)) for text in input_prompts]
         avg_tokens = sum(token_counts) / len(token_counts)
 
         return {"avg_input_tokens": avg_tokens}, token_counts
 
+
 class GAOKAOMM_Accuracy(BaseMetric):
-    metric_name = 'gaokao_acc'
+    metric_name = "gaokao_acc"
+
     def __init__(self, config):
         super().__init__(config)
-    
+
     def calculate_metric(self, data):
         metric_dict = {}
         acc_list = []
@@ -623,7 +655,7 @@ class GAOKAOMM_Accuracy(BaseMetric):
             subject = item.subject
 
             question_type = item.question_type
-            if question_type == 'single_choice':
+            if question_type == "single_choice":
                 acc = 1.0 if pred == golden_answer else 0.0
             else:
                 if pred == golden_answer:
@@ -638,7 +670,6 @@ class GAOKAOMM_Accuracy(BaseMetric):
             metric_dict[subject].append(acc)
         for key, value in metric_dict.items():
             metric_dict[key] = np.mean(value)
-        
-        metric_dict['avg_score'] = np.mean(acc_list)
-        return metric_dict, acc_list 
-                
+
+        metric_dict["avg_score"] = np.mean(acc_list)
+        return metric_dict, acc_list

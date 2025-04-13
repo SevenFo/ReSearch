@@ -1,7 +1,8 @@
 # ------------------------------------------------Environment Settings------------------------------------------------#
 # Directory paths for data and outputs
-data_dir: "your-data-dir"
-save_dir: "your-save-dir"
+data_dir: "/home/ps/Projects/ReSearch-1/data/longbench"
+save_dir: "/home/ps/Projects/ReSearch-1/output/longbench_hotpotqa_e"
+# test_sample_num: 10
 
 # Seed for reproducibility
 seed: 2024
@@ -13,7 +14,7 @@ save_note: 'experiment'
 # -------------------------------------------------Retrieval Settings------------------------------------------------#
 # If set the remote url, the retriever will be a remote retriever and ignore following settings
 use_remote_retriever: True
-remote_retriever_url: "your-remote-retriever-url"
+remote_retriever_url: "localhost:20081"
 
 instruction: ~                    # instruction for retrieval model
 retrieval_topk: 5                 # number of retrieved documents
@@ -27,8 +28,8 @@ retrieval_pooling_method: ~       # set automatically if not provided
 
 # -------------------------------------------------Generator Settings------------------------------------------------#
 framework: sgl_remote                   # inference frame work of LLM, supporting: 'hf','vllm','fschat'
-sgl_remote_url: "your-sgl-remote-url"
-generator_model: "the-model-local-path" # name or path of the generator model, for laoding tokenizer
+sgl_remote_url: "localhost:30080"
+generator_model: "agentrl/ReSearch-Qwen-7B-Instruct" # name or path of the generator model, for laoding tokenizer
 generator_max_input_len: 8192           # max length of the input
 generation_params:
   do_sample: False

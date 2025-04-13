@@ -15,13 +15,14 @@ class Evaluator:
 
         self.avaliable_metrics = self._collect_metrics()
 
-        self.metric_class = {}  
+        self.metric_class = {}
         for metric in self.metrics:
             if metric in self.avaliable_metrics:
                 self.metric_class[metric] = self.avaliable_metrics[metric](self.config)
             else:
                 print(f"{metric} has not been implemented!")
                 raise NotImplementedError
+        print(f"settng up {self.metric_class}")
 
     def _collect_metrics(self):
         """Collect all classes based on ```BaseMetric```."""
@@ -49,7 +50,9 @@ class Evaluator:
         result_dict = {}
         for metric in self.metrics:
             try:
-                metric_result, metric_scores = self.metric_class[metric].calculate_metric(data)
+                metric_result, metric_scores = self.metric_class[
+                    metric
+                ].calculate_metric(data)
                 result_dict.update(metric_result)
 
                 for metric_score, item in zip(metric_scores, data):

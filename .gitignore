@@ -22,3 +22,10 @@ var/
 
 # Mac
 .DS_Store
+
+# xxx
+LongBench_1744473763/
+FlashRAG_datasets_1744472312/
+e5-base-v2_1744472152/
+output/
+data/longbench/
