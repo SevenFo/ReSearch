@@ -144,6 +144,26 @@ python run_eval.py \
 
 For base model, please use `--apply_chat False` and for instruction-tuned model, please use `--apply_chat True`, for loading correct prompt template when conducting evaluation for *ReSearch* model. For more details about the configuration, please refer to the `scripts/evaluation/eval_config.yaml` file. 
 
+## 测试结果
+
+### LongBench 基准测试结果 (ReSearch-Qwen-7B-Instruct)
+
+以下是使用 ReSearch-Qwen-7B-Instruct 模型在 LongBench 基准测试上的结果：
+
+| 数据集                      | EM    | F1       | ACC   | Precision | Recall   |
+| --------------------------- | ----- | -------- | ----- | --------- | -------- |
+| longbench_2wikimqa          | 0.350 | 0.421445 | 0.400 | 0.421833  | 0.431833 |
+| longbench_2wikimqa_e        | 0.350 | 0.439162 | 0.433 | 0.435984  | 0.464250 |
+| longbench_hotpotqa          | 0.450 | 0.579542 | 0.510 | 0.602917  | 0.584929 |
+| longbench_hotpotqa_e        | 0.410 | 0.526043 | 0.453 | 0.555251  | 0.524225 |
+| longbench_multifieldqa_en   | 0.007 | 0.118469 | 0.007 | 0.210682  | 0.098556 |
+| longbench_multifieldqa_en_e | 0.020 | 0.134411 | 0.020 | 0.233479  | 0.112967 |
+| longbench_musique           | 0.335 | 0.438804 | 0.365 | 0.443016  | 0.449643 |
+| longbench_narrativeqa       | 0.065 | 0.149391 | 0.080 | 0.166988  | 0.153645 |
+
+* 注：表中的数据来源于各数据集测试结果中的 metric_score.txt 文件，测试使用 ReSearch-Qwen-7B-Instruct 模型。
+* 数据集目录格式为: {dataset_name}_{time}_{model_name}，例如 longbench_2wikimqa/2wikimqa_2025_04_14_02_26_research_qwen7b_ins/
+
 ## 🤝 Acknowledge
 
 This training implementation is based on [verl](https://github.com/volcengine/verl) and the evaluation is based on [FlashRAG](https://github.com/RUC-NLPIR/FlashRAG). The serving of retriever is based on [FastAPI](https://github.com/fastapi/fastapi). The model serving is based on [SGLang](https://docs.sglang.ai/). *ReSearch* models are trained based on [Qwen2.5](https://qwenlm.github.io/blog/qwen2.5/). We sincerely appreciate their contributions to the open-source community.
