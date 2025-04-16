@@ -23,6 +23,168 @@ from verl.utils.reward_score.re_search import (
 )
 
 
+class R1SearcherPipeline(BasicPipeline):
+    def __init__(self, config, retriever=None, generator=None, apply_chat=False):
+        super().__init__(config)
+        if retriever is None:
+            retriever = get_retriever(config)
+        if generator is None:
+            generator = get_generator(config)
+        self.retriever = retriever
+        self.generator = generator
+        self.apply_chat = apply_chat
+        if not self.apply_chat:
+            self.prompt_template = """The User asks a question, and the Assistant solves it.
+The Assistant first thinks about the reasoning process in the mind and then provides the User with the final answer.
+The output format of reasoning process and final answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "<think> reasoning process here </think>\n\n<answer> final answer here </answer>".
+During the thinking process, the Assistant can perform searching for uncertain knowledge if necessary with the format of "<|begin_of_query|> search query (only keywords) here <|end_of_query|>". **A query must involve only a single triple**.
+Then, the system will provide the Assistant with helpful information with the format of "<|begin_of_documents|> ...search results... <|end_of_documents|>".\n\nUser:{question}\nAssistant: <think>"""
+        else:
+            self.prompt_template = """The User asks a question, and the Assistant solves it.
+The Assistant first thinks about the reasoning process in the mind and then provides the User with the final answer.
+The output format of reasoning process and final answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "<think> reasoning process here </think>\n\n<answer> final answer here </answer>".
+During the thinking process, the Assistant can perform searching for uncertain knowledge if necessary with the format of "<|begin_of_query|> search query (only keywords) here <|end_of_query|>". **A query must involve only a single triple**.
+Then, the system will provide the Assistant with helpful information with the format of "<|begin_of_documents|> ...search results... <|end_of_documents|>"."""
+
+        self.tokenizer = AutoTokenizer.from_pretrained(config["generator_model_path"])
+
+    def extract_search_content(self, text: str) -> str:
+        try:
+            start_tag = "<|begin_of_query|>"
+            end_tag = "<|end_of_query|>"
+            assert text.strip().endswith(end_tag)
+            end_pos = text.rindex(end_tag)
+            start_pos = text.rindex(start_tag, 0, end_pos)
+            return (
+                text[start_pos + len(start_tag) : end_pos]
+                .strip()  # copy from original
+                .replace('"', "")
+                .replace("'", "")
+                .replace("\t", " ")
+                .replace("...", "")
+            )
+        except ValueError:
+            return ""
+
+    def extract_answer(self, text: str) -> str:
+        text = text.strip()
+
+        pattern = r"<answer>(.*?)</answer>"
+        match = re.search(pattern, text, re.DOTALL)
+        if not match:
+            return None
+
+        return match.group(1)
+
+    def run_item(self, item):
+        # assert self.apply_chat is False
+        if self.apply_chat:
+            query = self.tokenizer.apply_chat_template(
+                [
+                    {"role": "system", "content": self.prompt_template},
+                    {"role": "user", "content": item.question},
+                ],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        else:
+            query = self.prompt_template.format(question=item.question)
+
+        init_query = query
+        # print(f"new query: {query}")
+
+        remain_length = self.config["generator_max_input_len"]
+        over_length_flag = False
+        while remain_length > 0:
+            # print(f"remain length: {remain_length}")
+            response = self.generator.generate(
+                input_list=[query],
+                return_raw_output=True,
+                stop=["<|end_of_query|>"],
+                max_new_tokens=remain_length,
+            )
+            response = response[0]
+            stop_reason = response["meta_info"]["finish_reason"].get("type", "")
+            stop_matched = response["meta_info"]["finish_reason"].get("matched", "")
+            # print(response)
+            print(stop_reason, stop_matched)
+
+            if (
+                stop_reason == "stop"
+                and isinstance(stop_matched, str)
+                and "<|end_of_query|>" in stop_matched
+            ):
+                output_str = response["text"] + "<|end_of_query|>"
+                search_content = self.extract_search_content(output_str)
+                if search_content != "":
+                    search_result = self.retriever.search(search_content)
+
+                    retrieval_text = ""
+                    for line in search_result:
+                        retrieval_text += f"{line['contents']}\n\n"
+                    retrieval_text = retrieval_text.strip()
+                else:
+                    retrieval_text = "nothing to search"
+
+                query += f"{output_str} <|begin_of_documents|>\n{retrieval_text}\n<|end_of_documents|>"
+            elif stop_reason == "stop" and (
+                stop_matched == 151643
+                or stop_matched == 151645
+                or stop_matched == 128009  # llama3.1
+            ):
+                output_str = response["text"]
+                query += f"{output_str}"
+                # print("stop generation")
+                break
+            elif stop_reason == "length":
+                output_str = response["text"]
+                over_length_flag = True
+                query += f"{output_str}"
+                break
+            else:
+                raise ValueError(
+                    f"stop_reason: {stop_reason}, stop_matched: {stop_matched}"
+                )
+
+            remain_length -= (
+                response["meta_info"]["prompt_tokens"]
+                + response["meta_info"]["completion_tokens"]
+            )
+
+        final_response = query.replace(init_query, "")
+        item.update_output("final_response", final_response)
+        if over_length_flag:
+            item.update_output("pred", "")
+        else:
+            try:
+                answer_part = extract_answer(final_response)
+                if answer_part is None:
+                    answer = ""
+                else:
+                    answer = answer_part.strip()
+                item.update_output("pred", answer)
+                # print(item.output["pred"])
+            except Exception as e:
+                print(e)
+                answer = ""
+                item.update_output("pred", answer)
+        # print(f"finished with {item['pred']}")
+
+    def run(self, dataset, do_eval=True, pred_process_fun=None):
+        with ThreadPoolExecutor(max_workers=100) as executor:
+            futures = [executor.submit(self.run_item, item) for item in dataset]
+            for future in tqdm(
+                as_completed(futures), total=len(futures), desc="Inference: "
+            ):
+                future.result()
+                # print(f"{future}")
+
+        dataset = self.evaluate(
+            dataset, do_eval=do_eval, pred_process_fun=pred_process_fun
+        )
+        return dataset
+
+
 class ReSearchPipeline(BasicPipeline):
     def __init__(self, config, retriever=None, generator=None, apply_chat=False):
         super().__init__(config)

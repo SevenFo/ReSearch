@@ -88,6 +88,17 @@ def research(args, config_dict):
     result = pipeline.run(test_data)
 
 
+def r1r(args, config_dict):
+    config = Config(args.config_path, config_dict)
+    all_split = get_dataset(config)
+    test_data = all_split[args.split]
+
+    from flashrag.pipeline import R1SearcherPipeline
+
+    pipeline = R1SearcherPipeline(config, apply_chat=args.apply_chat)
+    result = pipeline.run(test_data)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Running exp")
     parser.add_argument("--config_path", type=str, default="./eval_config.yaml")
@@ -112,6 +123,7 @@ if __name__ == "__main__":
         "iterretgen": iterretgen,
         "ircot": ircot,
         "research": research,
+        "r1r": r1r,
     }
 
     args = parser.parse_args()
