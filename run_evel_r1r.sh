@@ -4,7 +4,7 @@ DATA_DIR="/home/ps/Projects/ReSearch-1/data/longbench"
 # DATA_DIR="/home/ps/Projects/ReSearch-1/FlashRAG_datasets_1744472312"
 # 定义要测试的数据集列表
 SUBSETS=("musique" "hotpotqa" "hotpotqa_e" "2wikimqa" "2wikimqa_e" "narrativeqa" "multifieldqa_en" "multifieldqa_en_e")
-DONE_SUBSETS=("hotpotqa_e","2wikimqa_e","multifieldqa_en_e")
+DONE_SUBSETS=("hotpotqa_e" "2wikimqa_e" "multifieldqa_en_e")
 SGL_REMOTE_URL="http://0.0.0.0:30080"
 REMOTE_RETRIEVELR_URL="http://0.0.0.0:20081"
 # GENERATOR_MODEL="/home/ps/.cache/huggingface/hub/models--r1-researcher-qwen-2.5-b-base-rag-rl"
