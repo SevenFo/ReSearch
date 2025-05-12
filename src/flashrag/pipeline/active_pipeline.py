@@ -24,14 +24,20 @@ from verl.utils.reward_score.re_search import (
 
 
 class R1SearcherPipeline(BasicPipeline):
-    def __init__(self, config, retriever=None, generator=None, apply_chat=False):
+    def __init__(
+        self, config, retriever=None, generator=None, evaluator=None, apply_chat=False
+    ):
         super().__init__(config)
         if retriever is None:
             retriever = get_retriever(config)
         if generator is None:
             generator = get_generator(config)
+        if evaluator is None:
+            raise Exception("Please input evaluator")
+
         self.retriever = retriever
         self.generator = generator
+        self.evaluator = evaluator
         self.apply_chat = apply_chat
         if not self.apply_chat:
             self.prompt_template = """The User asks a question, and the Assistant solves it.
@@ -118,10 +124,27 @@ Then, the system will provide the Assistant with helpful information with the fo
                 search_content = self.extract_search_content(output_str)
                 if search_content != "":
                     search_result = self.retriever.search(search_content)
+                    search_content_contents = list(
+                        [line["contents"] for line in search_result]
+                    )
+                    scores = self.evaluator.evaluate_retrieval(
+                        query=query, docs=search_content_contents
+                    )
+                    upper_threshold = 0.592
+                    assert len(scores) == len(search_content_contents) == 5
+                    for idx in range(len(search_content_contents)):
+                        score = scores[idx]
+                        if score <= upper_threshold:
+                            print(
+                                f"based on score {score}, filtered content: {search_content_contents[idx]}"
+                            )
+                            search_content_contents[idx] = (
+                                "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
+                            )
 
                     retrieval_text = ""
-                    for line in search_result:
-                        retrieval_text += f"{line['contents']}\n\n"
+                    for content in search_content_contents:
+                        retrieval_text += f"{content}\n\n"
                     retrieval_text = retrieval_text.strip()
                 else:
                     retrieval_text = "nothing to search"
