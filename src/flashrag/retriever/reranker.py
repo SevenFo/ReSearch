@@ -45,7 +45,9 @@ class BaseReranker:
 
         assert len(query_list) == len(doc_list)
         if topk < min([len(docs) for docs in doc_list]):
-            warnings.warn("The number of doc returned by the retriever is less than the topk.")
+            warnings.warn(
+                "The number of doc returned by the retriever is less than the topk."
+            )
 
         # get doc contents
         doc_contents = []
@@ -78,7 +80,9 @@ class CrossReranker(BaseReranker):
     def __init__(self, config):
         super().__init__(config)
         self.tokenizer = AutoTokenizer.from_pretrained(self.reranker_model_path)
-        self.ranker = AutoModelForSequenceClassification.from_pretrained(self.reranker_model_path, num_labels=1)
+        self.ranker = AutoModelForSequenceClassification.from_pretrained(
+            self.reranker_model_path, num_labels=1
+        )
         self.ranker.eval()
         self.ranker.to(self.device)
 
@@ -89,11 +93,17 @@ class CrossReranker(BaseReranker):
         for query, docs in zip(query_list, doc_list):
             all_pairs.extend([[query, doc] for doc in docs])
         all_scores = []
-        for start_idx in tqdm(range(0, len(all_pairs), batch_size), desc="Reranking process: "):
+        for start_idx in tqdm(
+            range(0, len(all_pairs), batch_size), desc="Reranking process: "
+        ):
             pair_batch = all_pairs[start_idx : start_idx + batch_size]
 
             inputs = self.tokenizer(
-                pair_batch, padding=True, truncation=True, return_tensors="pt", max_length=self.max_length
+                pair_batch,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                max_length=self.max_length,
             ).to(self.device)
             batch_scores = (
                 self.ranker(**inputs, return_dict=True)
