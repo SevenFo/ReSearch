@@ -1,0 +1,2 @@
+port: 10099
+device: cuda:3

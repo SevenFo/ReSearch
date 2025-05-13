@@ -25,19 +25,32 @@ from verl.utils.reward_score.re_search import (
 
 class R1SearcherPipeline(BasicPipeline):
     def __init__(
-        self, config, retriever=None, generator=None, evaluator=None, apply_chat=False
+        self,
+        config,
+        retriever=None,
+        generator=None,
+        evaluator=None,
+        apply_chat=False,
+        retrieve_evaluate_on_sep=True,
+        evaluate_on_subject=False,
     ):
         super().__init__(config)
         if retriever is None:
             retriever = get_retriever(config)
         if generator is None:
             generator = get_generator(config)
-        if evaluator is None:
-            raise Exception("Please input evaluator")
+        # if evaluator is None:
+        #     raise Exception("Please input evaluator")
 
         self.retriever = retriever
         self.generator = generator
-        self.evaluator = evaluator
+        self.retrieve_evaluator = evaluator
+        self.evaluate_on_sep = config.retrieve_evaluate_on_separate
+        print(f"retrieve_evaluate_on_sep: {self.evaluate_on_sep}")
+        self.evaluate_on_subject = config.evaluate_on_subject
+        self.upper_threshold = getattr(
+            config, "upper_threshold", 0.592
+        )  # default value
         self.apply_chat = apply_chat
         if not self.apply_chat:
             self.prompt_template = """The User asks a question, and the Assistant solves it.
@@ -82,6 +95,14 @@ Then, the system will provide the Assistant with helpful information with the fo
 
         return match.group(1)
 
+    def split_subject_and_content(self, text):
+        lines = text.strip().split("\n")
+        if len(lines) == 0:
+            return "", ""
+        subject = lines[0].strip()
+        content = "\n".join(lines[1:]).strip()
+        return subject, content
+
     def run_item(self, item):
         # assert self.apply_chat is False
         if self.apply_chat:
@@ -113,7 +134,7 @@ Then, the system will provide the Assistant with helpful information with the fo
             stop_reason = response["meta_info"]["finish_reason"].get("type", "")
             stop_matched = response["meta_info"]["finish_reason"].get("matched", "")
             # print(response)
-            print(stop_reason, stop_matched)
+            # print(stop_reason, stop_matched)
 
             if (
                 stop_reason == "stop"
@@ -124,26 +145,53 @@ Then, the system will provide the Assistant with helpful information with the fo
                 search_content = self.extract_search_content(output_str)
                 if search_content != "":
                     search_result = self.retriever.search(search_content)
-                    search_content_contents = list(
+                    search_result_contents = list(
                         [line["contents"] for line in search_result]
                     )
-                    scores = self.evaluator.evaluate_retrieval(
-                        query=query, docs=search_content_contents
-                    )
-                    upper_threshold = 0.592
-                    assert len(scores) == len(search_content_contents) == 5
-                    for idx in range(len(search_content_contents)):
-                        score = scores[idx]
-                        if score <= upper_threshold:
-                            print(
-                                f"based on score {score}, filtered content: {search_content_contents[idx]}"
-                            )
-                            search_content_contents[idx] = (
-                                "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
-                            )
 
+                    if self.retrieve_evaluator is not None:
+                        if self.evaluate_on_subject:
+                            scores = []
+                            subject_and_content = [
+                                self.split_subject_and_content(content)
+                                for content in search_result_contents
+                            ]
+                            for subject, content in subject_and_content:
+                                if subject == "":
+                                    scores.append(-1)
+                                else:
+                                    scores.append(
+                                        self.retrieve_evaluator.evaluate_retrieval(
+                                            query=subject, docs=[content]
+                                        )[0]
+                                    )
+                        else:
+                            scores = self.retrieve_evaluator.evaluate_retrieval(
+                                query=search_content, docs=search_result_contents
+                            )
+                        upper_threshold = self.upper_threshold
+                        assert len(scores) == len(search_result_contents)
+                        if self.evaluate_on_sep:
+                            for idx in range(len(search_result_contents)):
+                                score = scores[idx]
+                                if score <= upper_threshold:
+                                    print(
+                                        f"based on score {score}, filtered content: {search_result_contents[idx]}"
+                                    )
+                                    search_result_contents[idx] = (
+                                        "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
+                                    )
+                        else:
+                            max_score = max(scores)
+                            if max_score <= upper_threshold:
+                                print(
+                                    f"based on score {max_score}, filtered content: {search_result_contents}"
+                                )
+                                search_result_contents = [
+                                    "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
+                                ]
                     retrieval_text = ""
-                    for content in search_content_contents:
+                    for content in search_result_contents:
                         retrieval_text += f"{content}\n\n"
                     retrieval_text = retrieval_text.strip()
                 else:
@@ -194,7 +242,7 @@ Then, the system will provide the Assistant with helpful information with the fo
         # print(f"finished with {item['pred']}")
 
     def run(self, dataset, do_eval=True, pred_process_fun=None):
-        with ThreadPoolExecutor(max_workers=100) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(self.run_item, item) for item in dataset]
             for future in tqdm(
                 as_completed(futures), total=len(futures), desc="Inference: "

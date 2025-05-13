@@ -2,9 +2,17 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
 import torch
+import yaml
 from transformers import T5Tokenizer, T5ForSequenceClassification
 
 from flashrag.retrieve_evaluator.crag_evaluator import CRAGEvaluator
+
+config = yaml.safe_load(
+    open(
+        "/home/ps/Projects/ReSearch-1/scripts/serving/retrieve_evaluator_config,yaml",
+        "r",
+    )
+)
 
 # 初始化 FastAPI 应用
 app = FastAPI()
@@ -49,16 +57,19 @@ class EvaluateRequest(BaseModel):
 
 
 # 实例化模型
-model = CRAGEvaluator("path/to/your/t5-evaluator-model")
+model = CRAGEvaluator(
+    "/home/ps/Projects/ReSearch-1/finetuned_t5_evaluator", device=config["device"]
+)
 
 
 # 定义接口
 @app.post("/evaluate")
 def evaluate(request: EvaluateRequest):
     try:
-        scores = model.evaluate(request.query, request.docs)
+        scores = model.evaluate_retrieval(request.query, request.docs)
         return {"scores": scores}
     except Exception as e:
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -66,4 +77,4 @@ def evaluate(request: EvaluateRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=1008)
+    uvicorn.run(app, host="0.0.0.0", port=config["port"])

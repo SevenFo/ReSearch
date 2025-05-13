@@ -99,6 +99,24 @@ def r1r(args, config_dict):
     result = pipeline.run(test_data)
 
 
+def r1r_crag(args, config_dict):
+    config = Config(args.config_path, config_dict)
+    all_split = get_dataset(config)
+    test_data = all_split[args.split]
+
+    from flashrag.pipeline import R1SearcherPipeline
+    from flashrag.retrieve_evaluator.crag_evaluator import RemoteCRAGEvaluator
+
+    remote_crag = RemoteCRAGEvaluator(
+        {"remote_evaluator_url": config["remote_crag_evaluator_url"]}
+    )
+
+    pipeline = R1SearcherPipeline(
+        config, apply_chat=args.apply_chat, evaluator=remote_crag
+    )
+    result = pipeline.run(test_data)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Running exp")
     parser.add_argument("--config_path", type=str, default="./eval_config.yaml")
@@ -115,8 +133,31 @@ if __name__ == "__main__":
         "--remote_retriever_url", type=str, default="your-remote-retriever-url"
     )
     parser.add_argument("--generator_model", type=str, default="your-local-model-path")
-    parser.add_argument("--apply_chat", type=bool, default=True)
-
+    parser.add_argument("--apply_chat", action="store_true")
+    parser.add_argument(
+        "--retrieve_evaluate_on_separate",
+        action="store_true",
+        help="Whether to retrieve and evaluate on separate.",
+    )
+    parser.add_argument(
+        "--evaluate_on_subject",
+        action="store_true",
+        help="Whether to evaluate on subject.",
+    )
+    parser.add_argument(
+        "--remote_crag_evaluator_url",
+        type=str,
+        default="http://localhost:10098",
+        help="URL of the remote retriever service.",
+    )
+    parser.add_argument(
+        "--upper_threshold",
+        type=float,
+        default=0.5,
+        help="Upper threshold for CRAG evaluator.",
+    )
+    print("Arguments:")
+    print(parser.parse_args())
     func_dict = {
         "naive": naive,
         "zero-shot": zero_shot,
@@ -124,6 +165,7 @@ if __name__ == "__main__":
         "ircot": ircot,
         "research": research,
         "r1r": r1r,
+        "r1r_crag": r1r_crag,
     }
 
     args = parser.parse_args()
@@ -137,7 +179,13 @@ if __name__ == "__main__":
         "sgl_remote_url": args.sgl_remote_url,
         "remote_retriever_url": args.remote_retriever_url,
         "generator_model": args.generator_model,
+        "retrieve_evaluate_on_separate": args.retrieve_evaluate_on_separate,
+        "evaluate_on_subject": args.evaluate_on_subject,
+        "remote_crag_evaluator_url": args.remote_crag_evaluator_url,
+        "upper_threshold": args.upper_threshold,
     }
+
+    print(config_dict)
 
     func = func_dict[args.method_name]
     func(args, config_dict)

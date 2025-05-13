@@ -161,6 +161,23 @@ For base model, please use `--apply_chat False` and for instruction-tuned model,
 | longbench_musique           | 0.335 | 0.438804 | 0.365 | 0.443016  | 0.449643 |
 | longbench_narrativeqa       | 0.065 | 0.149391 | 0.080 | 0.166988  | 0.153645 |
 
+#### CRAG plugin
+
+- R1R + CRAG + Llama3.1-ins-7B + retrieve_evaluate_on_separate
+
+  | 数据集                | EM    | F1     | ACC   | Precision | Recall |
+  | --------------------- | ----- | ------ | ----- | --------- | ------ |
+  | longbench_2wikimqa    | 0.3   | 0.35   | 0.31  | 0.36      | 0.35   | **** |
+  | longbench_hotpotqa    | 0.285 | 0.3715 | 0.315 | 0.40      | 0.375  |
+  | longbench_musique     | 0.17  | -      | -     | -         | -      |
+  | longbench_narrativeqa | 0.01  | -      | -     | -         | -      |
+
+- R1R + CRAG + Llama3.1-ins-7B + retrieve_evaluate_on_all
+
+  | 数据集            | EM    | F1  | ACC | Precision | Recall |
+  | ----------------- | ----- | --- | --- | --------- | ------ |
+  | longbench_musique | 0.195 | -   | -   | -         | -      |
+
 * 注：表中的数据来源于各数据集测试结果中的 metric_score.txt 文件，测试使用 ReSearch-Qwen-7B-Instruct 模型。
 * 数据集目录格式为: {dataset_name}_{time}_{model_name}，例如 longbench_2wikimqa/2wikimqa_2025_04_14_02_26_research_qwen7b_ins/
 

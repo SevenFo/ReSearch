@@ -1,10 +1,12 @@
 from typing import List
 import requests
 import torch
+import logging
 from transformers import T5ForSequenceClassification
 from transformers import T5Tokenizer
 
 from flashrag.retriever.retriever import retry
+import gc  # 导入垃圾回收模块，虽然主要靠empty_cache
 
 
 class CRAGEvaluator:
@@ -15,7 +17,7 @@ class CRAGEvaluator:
         )
         self.device = (
             (torch.device(device) if torch.cuda.is_available() else torch.device("cpu"))
-            if self.device is not None
+            if device is not None
             else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
 
@@ -93,6 +95,12 @@ class CRAGEvaluator:
     def evaluate_retrieval(self, query, docs):
         """评估检索到的文档相关性"""
         scores = []
+
+        # 在开始处理一批 docs 前清理缓存
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+            gc.collect()
+
         for doc in docs:
             input_text = query + " [SEP] " + doc
             inputs = self.tokenizer(
@@ -106,6 +114,10 @@ class CRAGEvaluator:
             score = float(outputs["logits"].cpu())
             scores.append(score)
         print(f"Query: {query}, scores: {scores}")
+        # 可选：在每次迭代后清理
+        del inputs, outputs
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
         return scores
 
 
@@ -119,7 +131,7 @@ class RemoteCRAGEvaluator:
         """
         self.remote_url = config["remote_evaluator_url"]
 
-    @retry(max_retries=10, delay=1)
+    @retry(max=5, sleep=1)
     def _evaluate(self, query: str, docs: List[str]) -> List[float]:
         """
         向远程服务发送评估请求。
@@ -148,5 +160,20 @@ class RemoteCRAGEvaluator:
             List[float]: 每个文档的评分。
         """
         scores = self._evaluate(query, docs)
-        print(f"Query: {query}, scores: {scores}")
+        # print(f"Query: {query}, scores: {scores}")
         return scores
+
+
+if __name__ == "__main__":
+    # 测试代码
+    remote_crag = RemoteCRAGEvaluator(
+        {"remote_evaluator_url": "http://localhost:10098"}
+    )
+    query = "What is the capital of France?"
+    docs = [
+        "The capital of France is Paris.",
+        "The capital of Germany is Berlin.",
+        "The capital of Italy is Rome.",
+    ]
+    scores = remote_crag.evaluate_retrieval(query, docs)
+    print(scores)
