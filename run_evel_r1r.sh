@@ -7,6 +7,7 @@ SUBSETS=("musique" "hotpotqa" "hotpotqa_e" "2wikimqa" "2wikimqa_e" "narrativeqa"
 DONE_SUBSETS=("hotpotqa_e" "2wikimqa_e" "multifieldqa_en_e")
 SGL_REMOTE_URL="http://0.0.0.0:30080"
 REMOTE_RETRIEVELR_URL="http://0.0.0.0:20081"
+REMOTE_CRAG_URL="http://172.17.0.1:11434/v1"
 # GENERATOR_MODEL="/home/ps/.cache/huggingface/hub/models--r1-researcher-qwen-2.5-b-base-rag-rl"
 GENERATOR_MODEL="/home/ps/.cache/huggingface/hub/models--XXsongLALA-Llama-3.1-8B-instruct-RAG-RL"
 cd scripts/evaluation
@@ -21,7 +22,7 @@ do
     echo "Running evaluation for subset: ${SUBSET}"
     # 根据当前 SUBSET 更新 SAVE_DIR
     # SAVE_DIR="/home/ps/Projects/ReSearch-1/output/FlashRAG_datasets_1744472312_${SUBSET}"
-    SAVE_DIR="/home/ps/Projects/ReSearch-1/output/longbench/r1r_llama3.1_8b_ins/${SUBSET}"
+    SAVE_DIR="/home/ps/Projects/ReSearch-1/output/longbench/r1r_crag_llama3_1_ins/${SUBSET}"
     python run_eval.py \
         --config_path eval_config.yaml \
         --method_name research \
@@ -29,13 +30,15 @@ do
         --dataset_name ${SUBSET} \
         --split test \
         --save_dir ${SAVE_DIR} \
-        --save_note research_qwen7b_ins \
+        --save_note crag_qwen2_5_7b_ins_seprate_filter \
         --sgl_remote_url ${SGL_REMOTE_URL} \
         --remote_retriever_url ${REMOTE_RETRIEVELR_URL} \
         --generator_model ${GENERATOR_MODEL} \
-        --apply_chat True \
-        --method_name r1r
-
+        --remote_crag_evaluator_url ${REMOTE_CRAG_URL} \
+        --method_name r1r_crag \
+        --retrieve_evaluate_strategy 'separate_filter' \
+        --evaluate_model_type 'qwen' \
+        --apply_chat
     echo "Finished evaluation for subset: ${SUBSET}"
     echo "Results saved in: ${SAVE_DIR}"
     echo "----------------------------------------"

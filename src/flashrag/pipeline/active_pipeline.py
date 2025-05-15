@@ -31,8 +31,6 @@ class R1SearcherPipeline(BasicPipeline):
         generator=None,
         evaluator=None,
         apply_chat=False,
-        retrieve_evaluate_on_sep=True,
-        evaluate_on_subject=False,
     ):
         super().__init__(config)
         if retriever is None:
@@ -45,8 +43,8 @@ class R1SearcherPipeline(BasicPipeline):
         self.retriever = retriever
         self.generator = generator
         self.retrieve_evaluator = evaluator
-        self.evaluate_on_sep = config.retrieve_evaluate_on_separate
-        print(f"retrieve_evaluate_on_sep: {self.evaluate_on_sep}")
+        self.retrieve_evaluate_strategy = config.retrieve_evaluate_strategy
+        print(f"retrieve_evaluate_strategy: {self.retrieve_evaluate_strategy}")
         self.evaluate_on_subject = config.evaluate_on_subject
         self.upper_threshold = getattr(
             config, "upper_threshold", 0.592
@@ -171,7 +169,24 @@ Then, the system will provide the Assistant with helpful information with the fo
                             )
                         upper_threshold = self.upper_threshold
                         assert len(scores) == len(search_result_contents)
-                        if self.evaluate_on_sep:
+                        filtered_contents = []
+                        if self.retrieve_evaluate_strategy == "separate_filter":
+                            for idx in range(len(search_result_contents)):
+                                if scores[idx] <= upper_threshold:
+                                    print(
+                                        f"based on score {scores[idx]}, filtered content: {search_result_contents[idx]}"
+                                    )
+                                    continue
+                                filtered_contents.append(search_result_contents[idx])
+                        elif self.retrieve_evaluate_strategy == "full_filter":
+                            max_score = max(scores)
+                            if max_score > upper_threshold:
+                                filtered_contents = search_result_contents
+                            else:
+                                print(
+                                    f"based on score {max_score}, filtered content: {search_result_contents}"
+                                )
+                        elif self.retrieve_evaluate_strategy == "separate_replace":
                             for idx in range(len(search_result_contents)):
                                 score = scores[idx]
                                 if score <= upper_threshold:
@@ -181,7 +196,8 @@ Then, the system will provide the Assistant with helpful information with the fo
                                     search_result_contents[idx] = (
                                         "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
                                     )
-                        else:
+                            filtered_contents = search_result_contents
+                        elif self.retrieve_evaluate_strategy == "full_replace":
                             max_score = max(scores)
                             if max_score <= upper_threshold:
                                 print(
@@ -190,8 +206,14 @@ Then, the system will provide the Assistant with helpful information with the fo
                                 search_result_contents = [
                                     "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
                                 ]
+                            filtered_contents = search_result_contents
+                        else:
+                            print(
+                                f"Unknown retrieve_evaluate_strategy: {self.retrieve_evaluate_strategy}"
+                            )
+                            return
                     retrieval_text = ""
-                    for content in search_result_contents:
+                    for content in filtered_contents:
                         retrieval_text += f"{content}\n\n"
                     retrieval_text = retrieval_text.strip()
                 else:
@@ -257,14 +279,26 @@ Then, the system will provide the Assistant with helpful information with the fo
 
 
 class ReSearchPipeline(BasicPipeline):
-    def __init__(self, config, retriever=None, generator=None, apply_chat=False):
+    def __init__(
+        self, config, retriever=None, generator=None, evaluator=None, apply_chat=False
+    ):
         super().__init__(config)
         if retriever is None:
             retriever = get_retriever(config)
         if generator is None:
             generator = get_generator(config)
+        # if evaluator is None:
+        #     raise Exception("Please input evaluator")
+
         self.retriever = retriever
         self.generator = generator
+        self.retrieve_evaluator = evaluator
+        self.retrieve_evaluate_strategy = config.retrieve_evaluate_strategy
+        print(f"retrieve_evaluate_strategy: {self.retrieve_evaluate_strategy}")
+        self.evaluate_on_subject = config.evaluate_on_subject
+        self.upper_threshold = getattr(
+            config, "upper_threshold", 0.592
+        )  # default value
         self.apply_chat = apply_chat
         if apply_chat:
             self.prompt_template = prompt_template_dict["re_search_template_sys"]
@@ -321,10 +355,80 @@ class ReSearchPipeline(BasicPipeline):
                 search_content = self.extract_search_content(output_str)
                 if search_content != "":
                     search_result = self.retriever.search(search_content)
-
+                    search_result_contents = list(
+                        [line["contents"] for line in search_result]
+                    )
+                    filtered_contents = []
+                    if self.retrieve_evaluator is not None:
+                        if self.evaluate_on_subject:
+                            scores = []
+                            subject_and_content = [
+                                self.split_subject_and_content(content)
+                                for content in search_result_contents
+                            ]
+                            for subject, content in subject_and_content:
+                                if subject == "":
+                                    scores.append(-1)
+                                else:
+                                    scores.append(
+                                        self.retrieve_evaluator.evaluate_retrieval(
+                                            query=subject, docs=[content]
+                                        )[0]
+                                    )
+                        else:
+                            scores = self.retrieve_evaluator.evaluate_retrieval(
+                                query=search_content, docs=search_result_contents
+                            )
+                        upper_threshold = self.upper_threshold
+                        assert len(scores) == len(search_result_contents)
+                        filtered_contents = []
+                        if self.retrieve_evaluate_strategy == "separate_filter":
+                            for idx in range(len(search_result_contents)):
+                                if scores[idx] <= upper_threshold:
+                                    print(
+                                        f"based on score {scores[idx]}, filtered content: {search_result_contents[idx]}"
+                                    )
+                                    continue
+                                filtered_contents.append(search_result_contents[idx])
+                        elif self.retrieve_evaluate_strategy == "full_filter":
+                            max_score = max(scores)
+                            if max_score > upper_threshold:
+                                filtered_contents = search_result_contents
+                            else:
+                                print(
+                                    f"based on score {max_score}, filtered content: {search_result_contents}"
+                                )
+                        elif self.retrieve_evaluate_strategy == "separate_replace":
+                            for idx in range(len(search_result_contents)):
+                                score = scores[idx]
+                                if score <= upper_threshold:
+                                    print(
+                                        f"based on score {score}, filtered content: {search_result_contents[idx]}"
+                                    )
+                                    search_result_contents[idx] = (
+                                        "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
+                                    )
+                            filtered_contents = search_result_contents
+                        elif self.retrieve_evaluate_strategy == "full_replace":
+                            max_score = max(scores)
+                            if max_score <= upper_threshold:
+                                print(
+                                    f"based on score {max_score}, filtered content: {search_result_contents}"
+                                )
+                                search_result_contents = [
+                                    "ALERT: The original retrieved content is irrelevant to the query and has been filtered. Please reconstruct your search query if needed."
+                                ]
+                            filtered_contents = search_result_contents
+                        else:
+                            print(
+                                f"Unknown retrieve_evaluate_strategy: {self.retrieve_evaluate_strategy}"
+                            )
+                            return
+                    else:
+                        filtered_contents = search_result_contents
                     retrieval_text = ""
-                    for line in search_result:
-                        retrieval_text += f"{line['contents']}\n\n"
+                    for line in filtered_contents:
+                        retrieval_text += f"{line}\n\n"
                     retrieval_text = retrieval_text.strip()
                 else:
                     retrieval_text = "nothing to search"

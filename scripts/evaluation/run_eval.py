@@ -99,6 +99,33 @@ def r1r(args, config_dict):
     result = pipeline.run(test_data)
 
 
+def research_crag(args, config_dict):
+    config = Config(args.config_path, config_dict)
+    all_split = get_dataset(config)
+    test_data = all_split[args.split]
+
+    from flashrag.pipeline import ReSearchPipeline
+    from flashrag.retrieve_evaluator.crag_evaluator import RemoteCRAGEvaluator
+    from flashrag.retrieve_evaluator.ollama_evaluator import OllamaDirectRAGEvaluator
+
+    if config["retriever_evaluate_model_type"] == "qwen":
+        remote_crag = OllamaDirectRAGEvaluator(
+            "qwen2.5:7b",
+            config["remote_crag_evaluator_url"],
+        )
+    elif config["retriever_evaluate_model_type"] == "t5":
+        remote_crag = RemoteCRAGEvaluator(
+            {"remote_evaluator_url": config["remote_crag_evaluator_url"]}
+        )
+    else:
+        print(f"Unknown model type: {config['retriever_evaluate_model_type']}")
+        return
+    pipeline = ReSearchPipeline(
+        config, apply_chat=args.apply_chat, evaluator=remote_crag
+    )
+    result = pipeline.run(test_data)
+
+
 def r1r_crag(args, config_dict):
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
@@ -106,11 +133,20 @@ def r1r_crag(args, config_dict):
 
     from flashrag.pipeline import R1SearcherPipeline
     from flashrag.retrieve_evaluator.crag_evaluator import RemoteCRAGEvaluator
+    from flashrag.retrieve_evaluator.ollama_evaluator import OllamaDirectRAGEvaluator
 
-    remote_crag = RemoteCRAGEvaluator(
-        {"remote_evaluator_url": config["remote_crag_evaluator_url"]}
-    )
-
+    if config["retriever_evaluate_model_type"] == "qwen":
+        remote_crag = OllamaDirectRAGEvaluator(
+            "qwen2.5:7b",
+            config["remote_crag_evaluator_url"],
+        )
+    elif config["retriever_evaluate_model_type"] == "t5":
+        remote_crag = RemoteCRAGEvaluator(
+            {"remote_evaluator_url": config["remote_crag_evaluator_url"]}
+        )
+    else:
+        print(f"Unknown model type: {config['retriever_evaluate_model_type']}")
+        return
     pipeline = R1SearcherPipeline(
         config, apply_chat=args.apply_chat, evaluator=remote_crag
     )
@@ -135,14 +171,21 @@ if __name__ == "__main__":
     parser.add_argument("--generator_model", type=str, default="your-local-model-path")
     parser.add_argument("--apply_chat", action="store_true")
     parser.add_argument(
-        "--retrieve_evaluate_on_separate",
-        action="store_true",
-        help="Whether to retrieve and evaluate on separate.",
+        "--retrieve_evaluate_strategy",
+        type=str,
+        default="separate_filter",
+        help="The strategy to evaluate the retrieval results: 'separate_filter' or 'full_filter' or 'separate_replace' or 'full_replace'.",
     )
     parser.add_argument(
         "--evaluate_on_subject",
         action="store_true",
         help="Whether to evaluate on subject.",
+    )
+    parser.add_argument(
+        "--evaluate_model_type",
+        type=str,
+        default="qwen",
+        help="The model type for evaluation. Options: 'qwen', 't5'",
     )
     parser.add_argument(
         "--remote_crag_evaluator_url",
@@ -166,6 +209,7 @@ if __name__ == "__main__":
         "research": research,
         "r1r": r1r,
         "r1r_crag": r1r_crag,
+        "research_crag": research_crag,
     }
 
     args = parser.parse_args()
@@ -179,10 +223,11 @@ if __name__ == "__main__":
         "sgl_remote_url": args.sgl_remote_url,
         "remote_retriever_url": args.remote_retriever_url,
         "generator_model": args.generator_model,
-        "retrieve_evaluate_on_separate": args.retrieve_evaluate_on_separate,
+        "retrieve_evaluate_strategy": args.retrieve_evaluate_strategy,
         "evaluate_on_subject": args.evaluate_on_subject,
         "remote_crag_evaluator_url": args.remote_crag_evaluator_url,
         "upper_threshold": args.upper_threshold,
+        "retriever_evaluate_model_type": args.evaluate_model_type,
     }
 
     print(config_dict)
